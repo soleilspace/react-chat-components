@@ -190,7 +190,7 @@ export const MessageList: FC<MessageListProps> = (props: MessageListProps) => {
       : renderItem(props.welcomeMessages);
   };
 
-  const renderItem = (envelope: MessageEnvelope) => {
+  const renderItem = (envelope: MessageEnvelope, previousEnvelope?: MessageEnvelope) => {
     const uuid = envelope.uuid || envelope.publisher || "";
     const currentUserClass = isOwnMessage(uuid) ? "pn-msg--own" : "";
     const actions = envelope.actions;
@@ -201,7 +201,7 @@ export const MessageList: FC<MessageListProps> = (props: MessageListProps) => {
 
     return (
       <div className={`pn-msg ${currentUserClass}`} key={envelope.timetoken}>
-        {renderMessage(envelope)}
+        {renderMessage(envelope, previousEnvelope)}
         <div className="pn-msg__actions">
           {props.extraActionsRenderer && props.extraActionsRenderer(envelope)}
           {props.reactionsPicker && message?.type !== "welcome" && (
@@ -222,7 +222,7 @@ export const MessageList: FC<MessageListProps> = (props: MessageListProps) => {
     );
   };
 
-  const renderMessage = (envelope: MessageEnvelope) => {
+  const renderMessage = (envelope: MessageEnvelope, previousEnvelope?: MessageEnvelope) => {
     const uuid = envelope.uuid || envelope.publisher || "";
     const time = getTime(envelope.timetoken as number);
     const isOwn = isOwnMessage(uuid);
@@ -232,7 +232,14 @@ export const MessageList: FC<MessageListProps> = (props: MessageListProps) => {
     const file = isFilePayload(envelope.message) && envelope.message.file;
     const actions = envelope.actions;
     const editedText = (Object.entries(actions?.updated || {}).pop() || []).shift() as string;
-
+    let previousUser, previousUuid;
+    if (previousEnvelope) {
+      const previousMessage = isFilePayload(previousEnvelope.message)
+        ? previousEnvelope.message.message
+        : previousEnvelope.message;
+      previousUuid = previousEnvelope.uuid || previousEnvelope.publisher || "";
+      previousUser = previousMessage.sender || getUser(previousUuid);
+    }
     if (props.messageRenderer && (props.filter ? props.filter(envelope) : true))
       return props.messageRenderer({ message: envelope, user, time, isOwn, editedText });
 
@@ -248,7 +255,11 @@ export const MessageList: FC<MessageListProps> = (props: MessageListProps) => {
         <div className="pn-msg__main">
           <div className="pn-msg__content">
             <div className="pn-msg__title">
-              <span className="pn-msg__author">{user?.name || uuid}</span>
+              <span className="pn-msg__author">
+                {previousUuid === uuid || previousUser?.name === user?.name
+                  ? ""
+                  : user?.name || uuid}
+              </span>
               <span className="pn-msg__time">{time}</span>
             </div>
             {message?.text &&
@@ -390,7 +401,11 @@ export const MessageList: FC<MessageListProps> = (props: MessageListProps) => {
         {(!props.fetchMessages || (!fetchingMessages && !messages.length)) &&
           renderWelcomeMessages()}
 
-        {messages && messages.map((m) => renderItem(m))}
+        {messages &&
+          messages.map((m, index) => {
+            const previousMessage = messages?.[index - 1];
+            return renderItem(m, previousMessage);
+          })}
 
         {props.children}
 
